@@ -68,6 +68,7 @@ class WhiteNoiseOnAcceleration2D {
   static inline void LambdaAndPsi(const double qc, const double delta,
                                   const double tau, Eigen::Matrix4d* lambda,
                                   Eigen::Matrix4d* psi) {
+    // Phi是状态转移矩阵
     *psi = Q(qc, tau) * (Phi(delta - tau).transpose()) * QInverse(qc, delta);
     *lambda = Phi(tau) - (*psi) * Phi(delta);
   }

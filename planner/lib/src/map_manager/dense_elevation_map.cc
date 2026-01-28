@@ -241,8 +241,8 @@ int DenseElevationMap::UpdateLayerSafe(const int layer, const double x,
                                        const double y,
                                        const double height_hint) {
   const int col = index_x_safe(x);
-  int row = index_y_safe(y) + layer * max_y_;
-  double cost = cost_(row, col);
+  int row = index_y_safe(y) + layer * max_y_;    // max_y_是单层的行数
+  double cost = cost_(row, col);   // cost_为总的代价地图，已经被压缩成2维
   int real_layer = layer;
   double this_height = GetHeight(layer, x, y);
   bool unsafe_grid =
@@ -360,13 +360,14 @@ double DenseElevationMap::GetValueBilinear(const int layer, const double x,
   return (1 - diff(1)) * y0 + diff(1) * y1;
 }
 
-double DenseElevationMap::GetValueBilinearSafe(const int layer, const double x,
+double DenseElevationMap::GetValueBilinearSafe(const int layer, const double x,   // 双线性插值-
                                                const double y,
                                                const double height_hint,
                                                Eigen::Vector2d* grad) {
-  double x_lb = std::max(std::floor(x - 0.5), 0.0);
+  double x_lb = std::max(std::floor(x - 0.5), 0.0); // 找到（x,y）所在网格索引（idx_x,idx_y）
   double y_lb = std::max(std::floor(y - 0.5), 0.0);
 
+  // 求出四个网格的代价值
   double value[2][2];
   for (int x = 0; x < 2; ++x) {
     for (int y = 0; y < 2; ++y) {
@@ -376,12 +377,12 @@ double DenseElevationMap::GetValueBilinearSafe(const int layer, const double x,
 
   Eigen::Vector2d diff(x - x_lb, y - y_lb);
 
-  double y0 = (1 - diff(0)) * value[0][0] + diff(0) * value[1][0];
-  double y1 = (1 - diff(0)) * value[0][1] + diff(0) * value[1][1];
-  double x0 = (1 - diff(1)) * value[0][0] + diff(1) * value[0][1];
+  double y0 = (1 - diff(0)) * value[0][0] + diff(0) * value[1][0]; // y0 (底边的投影)：在 $y = y_{lb}$ 这条水平线上，根据 $x$ 的相对位置插值出的高度
+  double y1 = (1 - diff(0)) * value[0][1] + diff(0) * value[1][1]; // y1 (顶边的投影)：在 $y = y_{lb} + 1$ 这条水平线上，根据 $x$ 的相对位置插值出的高度。
+  double x0 = (1 - diff(1)) * value[0][0] + diff(1) * value[0][1]; // 在 $x = x_{lb}$ 这条垂直线上，根据 $y$ 的相对位置插值出的高度。
   double x1 = (1 - diff(1)) * value[1][0] + diff(1) * value[1][1];
 
-  if (grad) {
+  if (grad) { // 梯度
     (*grad)(0) = x1 - x0;
     (*grad)(1) = y1 - y0;
   }

@@ -46,13 +46,13 @@ gtsam::Vector GPInterpolateObstacleFactorWnoa::evaluateError(
   double error = 0.0;
 
   if (cost > cost_threshold_) {
-    error = (cost - cost_threshold_) * (cost - cost_threshold_);
-    H(0, 0) = 2 * (cost - cost_threshold_) * grad(0);
+    error = (cost - cost_threshold_) * (cost - cost_threshold_);   // 代价函数
+    H(0, 0) = 2 * (cost - cost_threshold_) * grad(0);  // 误差 $e$ 相对于插值的状态变量 $x_inter$ 的导数(链式求导法则)
     H(0, 2) = 2 * (cost - cost_threshold_) * grad(1);
   }
 
   if (H1 || H2) {
-    *H1 = H * J_x1;
+    *H1 = H * J_x1;  // 误差对x1的雅可比矩阵
     *H2 = H * J_x2;
     count_++;
   }

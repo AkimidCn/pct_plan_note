@@ -18,8 +18,8 @@ class GPInterpolatorWnoa {
                                     const gtsam::Vector4& x2, const double qc,
                                     const double interval, const double tau) {
     gtsam::Matrix44 lambda, psi;
-    WhiteNoiseOnAcceleration2D::LambdaAndPsi(qc, interval, tau, &lambda, &psi);
-    return lambda * x1 + psi * x2;
+    WhiteNoiseOnAcceleration2D::LambdaAndPsi(qc, interval, tau, &lambda, &psi);  // 计算lambda和psi
+    return lambda * x1 + psi * x2;   // 高斯插值公式
   }
 
   inline gtsam::Vector4 Interpolate(

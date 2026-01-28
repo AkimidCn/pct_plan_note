@@ -23,20 +23,20 @@ constexpr double kQc = 0.1;
 bool GPMPOptimizerWnoa::GenerateTrajectory(
     const std::vector<PathPoint>& input_path, const double T) {
   auto t0 = std::chrono::high_resolution_clock::now();
-  static auto sigma_initial = Diagonal::Sigmas(Vector4(0.001, 0.1, 0.001, 0.1));
+  static auto sigma_initial = Diagonal::Sigmas(Vector4(0.001, 0.1, 0.001, 0.1));  // GTSAM 中定义噪声模型
   static auto sigma_goal = Diagonal::Sigmas(Vector4(0.001, 1, 0.001, 1));
 
   std::vector<PathPoint> path;
-  SubSamplePath(input_path, path);
+  SubSamplePath(input_path, path);  // 下采样到1/10  ；input_path：输入的待优化轨迹
 
-  double T_tmp = static_cast<double>(input_path.size() - 1) / 3;
+  double T_tmp = static_cast<double>(input_path.size() - 1) / 3;  // 估计走完整个路径的时间
   int N = path.size();
   double dt = T_tmp / (N - 1);
-  double tau = dt / (interpolate_num_ + 1);
+  double tau = dt / (interpolate_num_ + 1);  // interpolate_num_：插值数量
   std::cout<<"tau: "<<tau<<std::endl;
 
   Vector4 x0, xN;
-  PathPointToNode(path.front(), x0);
+  PathPointToNode(path.front(), x0);   //状态向量：x0=[x,vx,y,vy]
   PathPointToNode(path.back(), xN);
 
   if (debug_) {
@@ -45,21 +45,25 @@ bool GPMPOptimizerWnoa::GenerateTrajectory(
     std::cout << "xN: " << xN.transpose() << std::endl;
   }
 
-  auto graph = gtsam::NonlinearFactorGraph();
+  auto graph = gtsam::NonlinearFactorGraph();    // 创建一个 GTSAM 非线性因子图对象
   int factor_idx = 0;
   std::vector<int> obstacle_factor_idx;
 
   gtsam::Values init_values;
-  opt_init_value_ = Eigen::MatrixXd(4, N + (N - 1) * interpolate_num_);
-  opt_init_layer_ = Eigen::VectorXd(N + (N - 1) * interpolate_num_);
+  opt_init_value_ = Eigen::MatrixXd(4, N + (N - 1) * interpolate_num_); //预分配内存 
+                                                                        //优化前的初始轨迹数据 4行：x0=[x,vx,y,vy] 
+                                                                        //列：总点数
+  opt_init_layer_ = Eigen::VectorXd(N + (N - 1) * interpolate_num_);  // 层信息
 
   int col_index = 0;
-  for (int i = 0; i < N; ++i) {
+  for (int i = 0; i < N; ++i) {             // 遍历所有 path 点
     Vector4 x1, x2;
-    PathPointToNode(path[i], x1);
-    init_values.insert<Vector4>(gtsam::Symbol('x', i), x1);
-    opt_init_value_.col(col_index) = x1;
-    opt_init_layer_(col_index) = path[i].layer;
+    PathPointToNode(path[i], x1);   //  将路径点转换为4维状态 → [x, vx, y, vy]
+    // 插入到GTSAM优化变量中
+    //gtsam::Symbol('x', i) 创建优化变量的变量名为 x_i 
+    init_values.insert<Vector4>(gtsam::Symbol('x', i), x1);  //创建并初始化变量，给x_i赋值x1
+    opt_init_value_.col(col_index) = x1;         // 存储状态
+    opt_init_layer_(col_index) = path[i].layer;  // 存储层号
     if (debug_) {
       printf("path[%d/%d], layer: %d, height: %f\n", i, N - 1, path[i].layer,
              path[i].height);
@@ -68,11 +72,12 @@ bool GPMPOptimizerWnoa::GenerateTrajectory(
     if (i < N - 1) {
       PathPointToNode(path[i + 1], x2);
       for (int j = 0; j < interpolate_num_; ++j) {
+        // 这里的插值只是为优化器提供一个初始值
         auto inter_x =
-            GPInterpolatorWnoa::Interpolate(x1, x2, kQc, dt, tau * (j + 1));
+            GPInterpolatorWnoa::Interpolate(x1, x2, kQc, dt, tau * (j + 1)); // 高斯过程插值保证：位置、速度、加速度都连续
         double height_hint =
             path[i].height + (path[i + 1].height - path[i].height) * (j + 1) /
-                                 (interpolate_num_ + 1);
+                                 (interpolate_num_ + 1);  // 高度的线性插值
         opt_init_value_.col(col_index) = inter_x;
         if (debug_) {
           printf(
@@ -118,12 +123,12 @@ bool GPMPOptimizerWnoa::GenerateTrajectory(
 
   // std::cout << opt_init_value_ << std::endl;
 
-  graph.add(PriorFactor4(gtsam::Symbol('x', 0), x0, sigma_initial));
+  graph.add(PriorFactor4(gtsam::Symbol('x', 0), x0, sigma_initial));  // 对这个变量施加约束，先验因子（Prior Factor）,固定起点位置，sigma_initial为噪声模型
   factor_idx++;
   for (int i = 1; i < N; ++i) {
-    gtsam::Key last_x = gtsam::Symbol('x', i - 1);
+    gtsam::Key last_x = gtsam::Symbol('x', i - 1);  // 因子图中的变量节点
     gtsam::Key this_x = gtsam::Symbol('x', i);
-    graph.add(GPPriorFactorWnoa(last_x, this_x, dt, kQc));
+    graph.add(GPPriorFactorWnoa(last_x, this_x, dt, kQc));  // 运动学高斯约束 
     factor_idx++;
     for (int j = 0; j < interpolate_num_; ++j) {
       double height_hint =
@@ -131,19 +136,19 @@ bool GPMPOptimizerWnoa::GenerateTrajectory(
                                    (interpolate_num_ + 1);
       graph.add(GPInterpolateObstacleFactorWnoa(
           last_x, this_x, map_, path[i].layer, height_hint, safe_cost_margin_,
-          0.1, kQc, dt, (i - 1) * dt, tau * (j + 1)));
+          0.1, kQc, dt, (i - 1) * dt, tau * (j + 1)));  // 对两节点之间的高斯插值进行约束
       obstacle_factor_idx.emplace_back(factor_idx + 1e7);
       factor_idx++;
     }
     if (i < N - 1) {
       graph.add(GPObstacleFactorWnoa(this_x, map_, path[i].layer,
                                      path[i].height, 0.1, safe_cost_margin_,
-                                     true));
+                                     true));  // 对节点进行约束
       obstacle_factor_idx.emplace_back(factor_idx);
       factor_idx++;
     }
   }
-  graph.add(PriorFactor4(gtsam::Symbol('x', N - 1), xN, sigma_goal));
+  graph.add(PriorFactor4(gtsam::Symbol('x', N - 1), xN, sigma_goal));  // 约束终点位置
   factor_idx++;
 
   if (debug_) {
@@ -151,9 +156,9 @@ bool GPMPOptimizerWnoa::GenerateTrajectory(
   }
 
   // gtsam::GaussNewtonParams param;
-  gtsam::LevenbergMarquardtParams param;
+  gtsam::LevenbergMarquardtParams param;   // 创建了一个 LM 优化参数的对象实例
   // param.setlambdaInitial(100.0);
-  param.setMaxIterations(max_iterations_);
+  param.setMaxIterations(max_iterations_);  // 设置了优化算法允许执行的 最大迭代次数
   // param.setAbsoluteErrorTol(5e-4);
   // param.setRelativeErrorTol(0.01);
   // param.setErrorTol(1.0);
@@ -235,30 +240,30 @@ void GPMPOptimizerWnoa::PathPointToNode(const PathPoint& path_point,
                                         Vector4& x) {
   double v = std::max(path_point.ref_v, 1.0);
   x(0, 0) = path_point.x;
-  x(1, 0) = std::cos(path_point.heading) * v;
+  x(1, 0) = std::cos(path_point.heading) * v;    //v_x
   x(2, 0) = path_point.y;
-  x(3, 0) = std::sin(path_point.heading) * v;
+  x(3, 0) = std::sin(path_point.heading) * v;    //v_y
 }
 
 void GPMPOptimizerWnoa::SubSamplePath(
     const std::vector<PathPoint>& path,
     std::vector<PathPoint>& sub_sampled_path) {
-  assert(path.size() > 1);
+  assert(path.size() > 1);  // 确保路径至少有两个点
 
   if (!sub_sampled_path.empty()) {
     sub_sampled_path.clear();
   }
 
   int size = path.size();
-  int num_segs = std::ceil((size - 1) / sample_interval_);
+  int num_segs = std::ceil((size - 1) / sample_interval_);  // sample_interval_ = 10
 
-  if (num_segs <= 1) {
-    sub_sampled_path.emplace_back(path.front());
-    sub_sampled_path.emplace_back(path.back());
+  if (num_segs <= 1) {  // 如果只有1段或更少
+    sub_sampled_path.emplace_back(path.front());  // 直接取起点和终点
+    sub_sampled_path.emplace_back(path.back());  
     return;
   }
 
-  double new_interval = static_cast<double>(size - 1) / num_segs;
+  double new_interval = static_cast<double>(size - 1) / num_segs; // 每段包含多少个点
 
   int idx;
   double float_idx = 0.0;
@@ -269,11 +274,11 @@ void GPMPOptimizerWnoa::SubSamplePath(
     float_idx += new_interval;
     idx = static_cast<int>(float_idx);
 
-    if (idx == size - 1) {
+    if (idx == size - 1) {  // 最后一个点
       sub_sampled_path.emplace_back(path[idx]);
     } else {
       sub_sampled_path.emplace_back(
-          PathPoint::Interpolate(path[idx], path[idx + 1], float_idx - idx));
+          PathPoint::Interpolate(path[idx], path[idx + 1], float_idx - idx));  // 插值
     }
   }
 

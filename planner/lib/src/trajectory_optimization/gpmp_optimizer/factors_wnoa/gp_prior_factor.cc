@@ -8,5 +8,5 @@ gtsam::Vector GPPriorFactorWnoa::evaluateError(
     boost::optional<gtsam::Matrix&> H2) const {
   if (H1) *H1 = phi_;
   if (H2) *H2 = -gtsam::Matrix44::Identity();
-  return phi_ * x1 - x2;
+  return phi_ * x1 - x2;   // phi_ * x1是通过运动学预测的位置   x2是优化器给出的实际状态
 }

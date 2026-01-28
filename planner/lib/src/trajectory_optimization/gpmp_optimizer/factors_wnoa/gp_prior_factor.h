@@ -4,7 +4,7 @@
 #include "trajectory_optimization/gpmp_optimizer/models/wnoa.hpp"
 
 class GPPriorFactorWnoa
-    : public gtsam::NoiseModelFactor2<gtsam::Vector4, gtsam::Vector4> {
+    : public gtsam::NoiseModelFactor2<gtsam::Vector4, gtsam::Vector4> { // 类继承于gtsam::NoiseModelFactor2
  public:
   GPPriorFactorWnoa(gtsam::Key key1, gtsam::Key key2, const double delta,
                 const double Qc)

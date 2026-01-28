@@ -98,13 +98,13 @@ bool Astar::Search(const Eigen::Vector3i& start, const Eigen::Vector3i& goal) {
   std::priority_queue<Node*, std::vector<Node*>, NodeCompare> open_set;  // 待确定点
   std::unordered_map<int, Node*> closed_set; // 已确定点
 
-  open_set.push(start_node);
+  open_set.push(start_node);  // 放入一个点,自动执行排序
 
   printf("start searching\n");
 
   while (!open_set.empty()) {
     Node* current_node = open_set.top();
-    open_set.pop();  // 
+    open_set.pop();  // 移除并丢弃队首元素
 
     if (current_node->idx == goal_node->idx) {  // 如果是目标点
       while (current_node->parent != nullptr) {  //回溯找父节点
@@ -258,7 +258,7 @@ double Astar::GetHeuristic(const Node* node1, const Node* node2) const {
 std::vector<PathPoint> Astar::GetPathPoints() const {
   std::vector<PathPoint> path_points;
 
-  auto size = search_result_.size();
+  auto size = search_result_.size();  // search_result_存储astar搜索得到的路径节点
   path_points.resize(size);
 
   if (size == 0) {
@@ -280,7 +280,7 @@ std::vector<PathPoint> Astar::GetPathPoints() const {
     path_points[i].y = search_result_[i]->idx(1);
     path_points[i].height = search_result_[i]->height;
     if (i > 0) {
-      path_points[i].heading =
+      path_points[i].heading =   // 计算航向角
           std::atan2(search_result_[i]->idx(1) - search_result_[i - 1]->idx(1),
                      search_result_[i]->idx(2) - search_result_[i - 1]->idx(2));
     }
