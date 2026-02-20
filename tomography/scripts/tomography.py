@@ -206,7 +206,7 @@ class Tomography(object):
 
 
 if __name__ == '__main__':
-    import argparse
+    import argparse # 导入用于解析命令行参数的工具库
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--scene', type=str, help='Name of the scene. Available: [\'Spiral\', \'Building\', \'Plaza\']')

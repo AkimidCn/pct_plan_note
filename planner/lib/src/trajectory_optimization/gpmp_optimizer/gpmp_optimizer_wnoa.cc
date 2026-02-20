@@ -69,10 +69,11 @@ bool GPMPOptimizerWnoa::GenerateTrajectory(
              path[i].height);
     }
     col_index++;
+    // 这部分代码像是调试相关的
     if (i < N - 1) {
       PathPointToNode(path[i + 1], x2);
       for (int j = 0; j < interpolate_num_; ++j) {
-        // 这里的插值只是为优化器提供一个初始值
+        
         auto inter_x =
             GPInterpolatorWnoa::Interpolate(x1, x2, kQc, dt, tau * (j + 1)); // 高斯过程插值保证：位置、速度、加速度都连续
         double height_hint =
@@ -189,10 +190,14 @@ bool GPMPOptimizerWnoa::GenerateTrajectory(
   opt_layers_ = Eigen::VectorXd::Zero(N + (N - 1) * interpolate_num_);
   opt_layers_(0) = path.front().layer;
   opt_layers_(opt_layers_.size() - 1) = path.back().layer;
-  for (int i = 0; i < obstacle_factor_idx.size(); ++i) {
+  for (int i = 0; i < obstacle_factor_idx.size(); ++i) {  // 取出最终的层级（Layer）
     // printf("%d, %d, %d, %d\n", i + 1, N, obstacle_factor_idx.size(),
     //        obstacle_factor_idx[i]);
     if (obstacle_factor_idx[i] < 1e7) {
+      // dynamic_cast<GPObstacleFactorWnoa*>(...) 类型转换：将获取到的因子指针强制转换为 GPObstacleFactorWnoa* 类型。
+      // 在 GTSAM 中，所有的因子都以基类 NonlinearFactor 的形式存储。为了调用子类特有的函数，需要进行动态类型转换。
+      // graph.at(...)：从 GTSAM 的非线性因子图中取出对应的因子。
+      //.get()：由于 graph 存储的是智能指针（通常是 boost::shared_ptr），.get() 用于获取该因子的原始指针。
       opt_layers_(i + 1) = dynamic_cast<GPObstacleFactorWnoa*>(
                                graph.at(obstacle_factor_idx[i]).get())
                                ->GetNodeLayer();
@@ -204,14 +209,14 @@ bool GPMPOptimizerWnoa::GenerateTrajectory(
   }
   // std::cout << opt_layers_.transpose() << std::endl;
 
-  for (int i = 0; i < N; ++i) {
+  for (int i = 0; i < N; ++i) {   //  提取出所有离散节点（Nodes）的最终优化值。
     opt_results_.row(i) =
         solution.at<Vector4>(gtsam::Symbol('x', i)).transpose();
   }
-
+  // WnoaTrajectoryInterpolator类接收整条轨迹并进行插值计算
   WnoaTrajectoryInterpolator traj_interpolator =
       WnoaTrajectoryInterpolator(opt_results_, dt, kQc);
-  trajectory_ = traj_interpolator.GenerateTrajectory(interpolate_num_);
+  trajectory_ = traj_interpolator.GenerateTrajectory(interpolate_num_);  // 插值后的轨迹
 
   opt_height_ = Eigen::VectorXd::Zero(N + (N - 1) * interpolate_num_);
   for (int i = 0; i < opt_layers_.size(); ++i) {
