@@ -48,20 +48,20 @@ class TomogramPlanner(object):
         trav = tomogram[0] # layers_t  膨胀后的代价地图
         trav_gx = tomogram[1]  # trav_grad_x 梯度
         trav_gy = tomogram[2] # trav_grad_y
-        elev_g = tomogram[3] # layers_g
-        elev_g = np.nan_to_num(elev_g, nan=-100)
-        elev_c = tomogram[4] # layers_c
+        elev_g = tomogram[3] # layers_g  地面高度
+        elev_g = np.nan_to_num(elev_g, nan=-100) # 将所有的 nan 值替换为 -100
+        elev_c = tomogram[4] # layers_c    天花板高度
         elev_c = np.nan_to_num(elev_c, nan=1e6)
 
         self.initPlanner(trav, trav_gx, trav_gy, elev_g, elev_c)
         
     def initPlanner(self, trav, trav_gx, trav_gy, elev_g, elev_c):
         diff_t = trav[1:] - trav[:-1]   # “上一层代价”减去“当前层代价”
-        diff_g = np.abs(elev_g[1:] - elev_g[:-1])
+        diff_g = np.abs(elev_g[1:] - elev_g[:-1])    # “上一层地面高度”减去“当前层”
 
         gateway_up = np.zeros_like(trav, dtype=bool)  # 新建和trav大小相同的bool型矩阵
         mask_t = diff_t < -8.0  # 上一层（k+1）的代价值比这一层（k）低得多
-        mask_g = (diff_g < 0.1) & (~np.isnan(elev_g[1:]))
+        mask_g = (diff_g < 0.1) & (~np.isnan(elev_g[1:])) # 上层高度和当层高度高度差值小
         gateway_up[:-1] = np.logical_and(mask_t, mask_g)
 
         gateway_dn = np.zeros_like(trav, dtype=bool)
@@ -77,10 +77,10 @@ class TomogramPlanner(object):
             max_heading_rate=self.max_heading_rate, use_quintic=self.use_quintic
         )
         
-        #  原始 trav:[n_slice, n_row（行）, n_col] ，重塑后为 (n_slice*n_row, n_col)
+        #  原始 trav:[n_slice, n_row（行）, n_col] ，reshape后为 (n_slice*n_row, n_col)
         self.planner.init_map(
             20, 15, self.resolution, self.n_slice, 0.2,
-            trav.reshape(-1, trav.shape[-1]).astype(np.double),  # 转换为二维数组，第一个-1表示自动计算该维度大小为总元素数除以后面维度（trav.shape[-1]即最后一维）
+            trav.reshape(-1, trav.shape[-1]).astype(np.double),  # 转换为二维数组，第一个-1表示自动计算，该维度大小为总元素数除以后面维度（trav.shape[-1]即最后一维）
             elev_g.reshape(-1, elev_g.shape[-1]).astype(np.double),
             elev_c.reshape(-1, elev_c.shape[-1]).astype(np.double),
             gateway.reshape(-1, gateway.shape[-1]),

@@ -25,7 +25,7 @@ void Astar::Init(const double cost_threshold, const int num_layers,
   cost_threshold_ = cost_threshold;
 step_cost_weight_  = step_cost_weight;
 
-  max_x_ = cost_map.cols();     // 行
+  max_x_ = cost_map.cols();     // 列
   max_y_ = cost_map.rows() / num_layers;
   max_layers_ = num_layers;
   xy_size_ = max_x_ * max_y_;
@@ -38,7 +38,7 @@ step_cost_weight_  = step_cost_weight;
     for (size_t j = 0; j < max_y_; ++j) {
       grid_map_[i][j].resize(max_x_);
       for (size_t k = 0; k < max_x_; ++k) {
-        double height = height_map(j + row_offset, k);
+        double height = height_map(j + row_offset, k); // height_map(n_slice*n_row, n_col)
         double z = static_cast<int>(height / resolution);
         grid_map_[i][j][k] = Node(Eigen::Vector3i(z, j, k), nullptr);
         grid_map_[i][j][k].cost = cost_map(j + row_offset, k);
@@ -98,15 +98,15 @@ bool Astar::Search(const Eigen::Vector3i& start, const Eigen::Vector3i& goal) {
   std::priority_queue<Node*, std::vector<Node*>, NodeCompare> open_set;  // 待确定点
   std::unordered_map<int, Node*> closed_set; // 已确定点
 
-  open_set.push(start_node);  // 放入一个点,自动执行排序
+  open_set.push(start_node);  // 1、将起点放进openlist
 
   printf("start searching\n");
 
-  while (!open_set.empty()) {
-    Node* current_node = open_set.top();
+  while (!open_set.empty()) {  // 2、openlist不为空
+    Node* current_node = open_set.top();  // 3、找到openlist代价值最小的节点
     open_set.pop();  // 移除并丢弃队首元素
 
-    if (current_node->idx == goal_node->idx) {  // 如果是目标点
+    if (current_node->idx == goal_node->idx) {  // 4、如果是目标点
       while (current_node->parent != nullptr) {  //回溯找父节点
         // search_result_.emplace_back(Eigen::Vector3i(
         //     current_node->layer, current_node->idx[1],
@@ -122,8 +122,9 @@ bool Astar::Search(const Eigen::Vector3i& start, const Eigen::Vector3i& goal) {
              duration.count() / 1000.0);
       return true;
     }
-
-    closed_set[GetHash(current_node->idx)] = current_node;   // 将当前节点加入closed_set列表； unordered_map的存储方式只会分配对应键值（closed_set[key]）的内存空间
+    // 将当前节点加入closed_set列表； 
+    // unordered_map的存储方式只会分配对应键值（closed_set[key]）的内存空间，也就是不会造成大量空置空间
+    closed_set[GetHash(current_node->idx)] = current_node;   
 
     // int layer = current_node->layer;
     // if (current_node->ele > 0.5) {
@@ -131,7 +132,7 @@ bool Astar::Search(const Eigen::Vector3i& start, const Eigen::Vector3i& goal) {
     // } else if (current_node->ele < -0.5) {
     //   layer = std::max(layer - 1, 0);
     // }
-    int layer = DecideLayer(current_node); //网关检测和层切换决策
+    int layer = DecideLayer(current_node); // 网关检测和层切换决策，输出的是 一个层号
 
     int i, j = 0;
     double tentative_g = 0.0;
@@ -211,10 +212,11 @@ int Astar::DecideLayer(const Node* cur_node) const {
 
     const Node& search_node = grid_map_[cur_layer][i][j];
 
+    // 检查这个位置在该层的高度是不是和当前点接近
     if (abs(search_node.height - cur_height) > 0.2) {
       continue;
     }
-
+    // 是不是 gateway ,ele > 0.5：表示上行,< -0.5：表示下行
     if (search_node.ele > 0.5) {
       true_layer = std::min(cur_layer + 1, max_layers_ - 1);  //向上层搜索
       break;
@@ -235,7 +237,7 @@ double Astar::GetHeuristic(const Node* node1, const Node* node2) const {
   if (h_type_ == kEuclidean) {
     // l2 distance
     cost = (node1->idx - node2->idx).norm();
-  } else if (h_type_ == kDiagonal) {
+  } else if (h_type_ == kDiagonal) {   // 对角线距离,允许三维空间对角线移动
     // octile distance
     Eigen::Vector3i d = node1->idx - node2->idx;
     int dx = abs(d(0)), dy = abs(d(1)), dz = abs(d(2));

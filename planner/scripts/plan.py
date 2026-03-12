@@ -34,7 +34,7 @@ path_pub = rospy.Publisher("/pct_path", Path, latch=True, queue_size=1)
 planner = TomogramPlanner(cfg)
 
 def pct_plan():
-    planner.loadTomogram(tomo_file)
+    planner.loadTomogram(tomo_file)  # 加载地图参数
 
     traj_3d = planner.plan(start_pos, end_pos)
     if traj_3d is not None:
